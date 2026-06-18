@@ -23,6 +23,7 @@ import gradlebuild.basics.isPromotionBuild
 import gradlebuild.basics.releasedVersionsFile
 import gradlebuild.basics.repoRoot
 import gradlebuild.identity.extension.GradleModuleExtension
+import gradlebuild.identity.registerPomPropertiesTask
 import gradlebuild.identity.extension.ReleasedVersionsDetails
 import java.util.Optional
 import java.util.jar.Attributes
@@ -92,6 +93,22 @@ tasks.withType<Jar>().configureEach {
             Attributes.Name.IMPLEMENTATION_VERSION.toString() to gradleModule.identity.version.map { it.baseVersion.version }
         )
     )
+}
+
+// Add a Maven-style pom.properties to the module jar so Maven-aware tooling can identify it.
+// Only the main `jar` is targeted, not sourcesJar/testFixturesJar/javadocJar, etc.
+pluginManager.withPlugin("java") {
+    val pomProperties = registerPomPropertiesTask("generatePomProperties", gradleModule.identity.baseName)
+    tasks.named<Jar>("jar") {
+        from(pomProperties)
+    }
+    // When the Shadow plugin is applied, the distribution ships the `shadowJar` output
+    // in place of the standard `jar`, so it needs the same pom.properties.
+    pluginManager.withPlugin("com.gradleup.shadow") {
+        tasks.named<Jar>("shadowJar") {
+            from(pomProperties)
+        }
+    }
 }
 
 /**

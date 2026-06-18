@@ -23,7 +23,11 @@ import gradlebuild.identity.tasks.BuildReceipt
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -64,6 +68,20 @@ abstract class ShadedJar : DefaultTask() {
     abstract val buildReceiptFile: ConfigurableFileCollection
 
     /**
+     * The Maven-style `pom.properties` file to include, so Maven-aware tooling can
+     * identify the shaded jar by its user-visible coordinates (not the relocated
+     * package name). Included under [pomPropertiesEntryPath].
+     */
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
+    @get:InputFile
+    abstract val pomPropertiesFile: RegularFileProperty
+
+    @get:Optional
+    @get:Input
+    abstract val pomPropertiesEntryPath: Property<String>
+
+    /**
      * The output Jar file.
      */
     @get:OutputFile
@@ -91,6 +109,9 @@ abstract class ShadedJar : DefaultTask() {
             }
             if (!buildReceiptFile.isEmpty) {
                 jarOutputStream.addJarEntry(BuildReceipt.buildReceiptLocation, buildReceiptFile.singleFile)
+            }
+            if (pomPropertiesFile.isPresent) {
+                jarOutputStream.addJarEntry(pomPropertiesEntryPath.get(), pomPropertiesFile.get().asFile)
             }
             relocatedClassesConfiguration.files.forEach { classesDir ->
                 val classesDirPath = classesDir.toPath()

@@ -17,6 +17,7 @@
 import gradlebuild.basics.capitalize
 import gradlebuild.basics.classanalysis.Attributes
 import gradlebuild.basics.decapitalize
+import gradlebuild.identity.registerPomPropertiesTask
 import gradlebuild.shade.ArtifactTypes.buildReceiptType
 import gradlebuild.shade.ArtifactTypes.classTreesType
 import gradlebuild.shade.ArtifactTypes.entryPointsType
@@ -112,6 +113,9 @@ fun addShadedJarTask(): TaskProvider<ShadedJar> {
         "shaded-jar/${baseName}-shaded-${version.baseVersion.version}.jar"
     }
 
+    // Identify the shaded jar by its user-visible coordinates, not the relocated packages.
+    val pomProperties = registerPomPropertiesTask("generateShadedJarPomProperties", moduleIdentity.baseName)
+
     return tasks.register("${project.name.kebabToCamel()}ShadedJar", ShadedJar::class) {
         jarFile = layout.buildDirectory.file(shadedJarFile)
         classTreesConfiguration.from(configurationToShade.artifactViewForType(classTreesType))
@@ -119,6 +123,8 @@ fun addShadedJarTask(): TaskProvider<ShadedJar> {
         relocatedClassesConfiguration.from(configurationToShade.artifactViewForType(relocatedClassesType))
         manifests.from(configurationToShade.artifactViewForType(manifestsType))
         buildReceiptFile.from(configurationToShade.artifactViewForType(buildReceiptType))
+        pomPropertiesFile = pomProperties.flatMap { it.pomPropertiesFile }
+        pomPropertiesEntryPath = pomProperties.flatMap { it.pomPropertiesEntryPath }
     }
 }
 

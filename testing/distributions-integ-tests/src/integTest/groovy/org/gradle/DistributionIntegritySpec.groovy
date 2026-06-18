@@ -19,6 +19,7 @@ package org.gradle
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.precondition.Requires
 import org.gradle.test.preconditions.TestExecutionPreconditions
+import org.gradle.util.GradleVersion
 import spock.lang.Issue
 
 import java.util.zip.ZipFile
@@ -84,6 +85,58 @@ class DistributionIntegritySpec extends DistributionIntegrationSpec {
         and:
         def duplicateClasses = classesIndex.findAll { it.value.size() > 1 }
         duplicateClasses.isEmpty()
+    }
+
+    /**
+     * Every jar that Gradle itself produces for the distribution must carry a Maven-style
+     * pom.properties at the canonical path, so Maven-aware tooling can identify the artifact.
+     * Gradle jars are recognised by their file name carrying the distribution base version;
+     * externally published jars bundled in the distribution (such as gradle-fileevents) keep
+     * their own version and are not expected to gain a Gradle-generated pom.properties here.
+     *
+     * The recorded version is the full Gradle version (so permanently published milestones and
+     * RCs stay identifiable), except that the per-build timestamp of nightly/snapshot builds is
+     * replaced with "SNAPSHOT" (the Maven convention) to keep the file reproducible. The jar file
+     * name itself always uses the base version.
+     */
+    def "all Gradle module jars contain a Maven pom.properties"() {
+        given:
+        def fullVersion = GradleVersion.current().version
+        def expectedVersion = GradleVersion.current().snapshot
+            ? fullVersion.replaceFirst(/\d{14}[-+]\d{4}/, "SNAPSHOT")
+            : fullVersion
+
+        when:
+        def gradleJars = collectJars(unpackDistribution()).findAll {
+            it.name.startsWith("gradle-") && it.name.endsWith("-${baseVersion}.jar")
+        }
+
+        then:
+        !gradleJars.isEmpty()
+
+        when:
+        def problems = [:]
+        gradleJars.each { jar ->
+            def artifactId = jar.name - "-${baseVersion}.jar"
+            def entryName = "META-INF/maven/org.gradle/${artifactId}/pom.properties"
+            new ZipFile(jar).withCloseable { zip ->
+                def entry = zip.getEntry(entryName)
+                if (entry == null) {
+                    problems[jar.name] = "missing $entryName"
+                    return
+                }
+                def properties = new Properties()
+                zip.getInputStream(entry).withCloseable { properties.load(it) }
+                def actual = [properties.groupId, properties.artifactId, properties.version]
+                def expected = ["org.gradle", artifactId, expectedVersion]
+                if (actual != expected) {
+                    problems[jar.name] = "expected $expected but was $actual"
+                }
+            }
+        }
+
+        then:
+        problems == [:]
     }
 
     private static def collectJars(TestFile file, Collection<File> acc = []) {
