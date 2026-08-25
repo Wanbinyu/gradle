@@ -23,13 +23,14 @@ import gradlebuild.basics.isPromotionBuild
 import gradlebuild.basics.releasedVersionsFile
 import gradlebuild.basics.repoRoot
 import gradlebuild.identity.extension.GradleModuleExtension
-import gradlebuild.identity.registerPomPropertiesTask
+import gradlebuild.identity.pomPropertiesVersion
 import gradlebuild.identity.extension.ReleasedVersionsDetails
 import java.util.Optional
 import java.util.jar.Attributes
 
 plugins {
     `java-base`
+    id("org.gradle.pom-properties")
 }
 
 val gradleModule = extensions.create<GradleModuleExtension>(GradleModuleExtension.NAME).apply {
@@ -95,19 +96,20 @@ tasks.withType<Jar>().configureEach {
     )
 }
 
-// Add a Maven-style pom.properties to the module jar so Maven-aware tooling can identify it.
-// Only the main `jar` is targeted, not sourcesJar/testFixturesJar/javadocJar, etc.
-pluginManager.withPlugin("java") {
-    val pomProperties = registerPomPropertiesTask("generatePomProperties", gradleModule.identity.baseName)
-    tasks.named<Jar>("jar") {
-        from(pomProperties)
-    }
-    // When the Shadow plugin is applied, the distribution ships the `shadowJar` output
-    // in place of the standard `jar`, so it needs the same pom.properties.
-    pluginManager.withPlugin("com.gradleup.shadow") {
-        tasks.named<Jar>("shadowJar") {
-            from(pomProperties)
-        }
+// The org.gradle.pom-properties plugin adds a Maven-style pom.properties to the standard `jar`.
+// Override the coordinates to match how Gradle modules are published (gradle-<name>) and keep
+// nightly builds reproducible by replacing the timestamp with SNAPSHOT (see pomPropertiesVersion).
+// groupId defaults to project.group ("org.gradle").
+pomProperties {
+    artifactId = gradleModule.identity.baseName
+    version = pomPropertiesVersion()
+}
+
+// The plugin only wires the standard `jar`. When the Shadow plugin is applied, the distribution
+// ships the `shadowJar` output in its place, so it needs the same pom.properties.
+pluginManager.withPlugin("com.gradleup.shadow") {
+    tasks.named<Jar>("shadowJar") {
+        from(tasks.named("generatePomProperties"))
     }
 }
 

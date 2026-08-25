@@ -17,41 +17,42 @@
 package gradlebuild.identity
 
 import gradlebuild.identity.extension.GradleModuleExtension
-import gradlebuild.identity.tasks.GeneratePomProperties
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
+import org.gradle.pomproperties.GeneratePomProperties
 
 /**
- * Registers a [GeneratePomProperties] task producing a Maven-style `pom.properties`
- * for a distribution jar of this module. The `groupId` is the project group
- * (`org.gradle`) and the `version` is the module base version — the same coordinates
- * the module is published under. The caller wires the generated resource into the
- * relevant jar.
- *
- * @param taskName the name of the generator task; also used for its output directory
- * @param artifactId the Maven artifact id, e.g. the jar's `archiveBaseName`
+ * The version recorded in the generated `pom.properties`: the full Gradle version so that
+ * permanently published milestones/RCs stay identifiable, with the per-build timestamp of
+ * nightly/snapshot builds replaced by `SNAPSHOT` (the Maven convention) so the file — and thus
+ * the jar — stays reproducible. This is the pom.properties content only; the jar file name keeps
+ * the base version.
+ */
+fun Project.pomPropertiesVersion(): Provider<String> {
+    val identity = extensions.getByType(GradleModuleExtension::class.java).identity
+    return identity.version.zip(identity.buildTimestamp.orElse("")) { version, timestamp ->
+        if (timestamp.isEmpty()) version.version else version.version.replace(timestamp, "SNAPSHOT")
+    }
+}
+
+/**
+ * Registers a [GeneratePomProperties] task (the task type comes from the `org.gradle.pom-properties`
+ * plugin) for a distribution jar whose artifactId is not the module default the plugin convention
+ * handles — namely the public-API ABI jar and the synthesized metadata jars.
  */
 fun Project.registerPomPropertiesTask(
     taskName: String,
     artifactId: Provider<String>
 ): TaskProvider<GeneratePomProperties> {
-    // Captured eagerly: module-identity sets the group before this is called, so the
-    // value is a plain String and stays configuration-cache friendly.
+    // Captured eagerly: module-identity sets the group before this is called, so the value is a
+    // plain String and stays configuration-cache friendly.
     val moduleGroupId = group.toString()
-    val identity = extensions.getByType(GradleModuleExtension::class.java).identity
-    // Use the full version so permanently published builds (milestones, RCs) remain
-    // identifiable. Nightly/snapshot versions embed a per-build timestamp, which would
-    // break reproducibility, so that timestamp is replaced with "SNAPSHOT" (the Maven
-    // convention for non-final versions). This affects only the pom.properties content,
-    // not the jar file name.
-    val moduleVersion = identity.version.zip(identity.buildTimestamp.orElse("")) { version, timestamp ->
-        if (timestamp.isEmpty()) version.version else version.version.replace(timestamp, "SNAPSHOT")
-    }
+    val moduleVersion = pomPropertiesVersion()
     return tasks.register(taskName, GeneratePomProperties::class.java) {
-        this.groupId.set(moduleGroupId)
+        groupId.set(moduleGroupId)
         this.artifactId.set(artifactId)
-        this.version.set(moduleVersion)
+        version.set(moduleVersion)
         destinationDirectory.set(layout.buildDirectory.dir("generated-resources/$taskName"))
     }
 }
