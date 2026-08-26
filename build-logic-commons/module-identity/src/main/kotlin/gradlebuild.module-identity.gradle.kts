@@ -95,8 +95,16 @@ tasks.withType<Jar>().configureEach {
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
     manifest.attributes(
         mapOf(
+            // Product evidence. Kept as "Gradle" rather than the module name so it matches the
+            // product of `cpe:2.3:a:gradle:gradle`, which is how CPE-based scanners key Gradle.
             Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle",
-            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion
+            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion,
+            // Vendor evidence, so a scanner reading only the manifest can still identify the
+            // artifact. IMPLEMENTATION_VENDOR_ID carries the groupId, mirroring pom.properties.
+            // Both follow the Maven Archiver convention (project.organization.name and
+            // project.groupId), which is what these scanners are written against.
+            Attributes.Name.IMPLEMENTATION_VENDOR.toString() to "Gradle Technologies",
+            Attributes.Name.IMPLEMENTATION_VENDOR_ID.toString() to group.toString()
         )
     )
 }

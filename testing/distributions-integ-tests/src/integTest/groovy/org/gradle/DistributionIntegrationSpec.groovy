@@ -457,6 +457,9 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
         jar.assertIsFile()
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Version'), equalTo(jarMetadataVersion))
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Title'), equalTo('Gradle'))
+        // Vendor evidence, so scanners reading only the manifest can identify the artifact.
+        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Vendor'), equalTo('Gradle Technologies'))
+        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Vendor-Id'), equalTo('org.gradle'))
     }
 
     private static void assertIsGradleApiMetadataJar(TestFile jar) {
