@@ -40,6 +40,18 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
     @Shared
     String baseVersion = GradleVersion.current().baseVersion.version
 
+    /**
+     * The version recorded in the metadata of a Gradle jar - the manifest's
+     * {@code Implementation-Version} and the Maven {@code pom.properties}. This is the full
+     * Gradle version, so permanently published milestones and RCs stay identifiable, except that
+     * the per-build timestamp of nightly/snapshot builds is replaced with "SNAPSHOT" to keep the
+     * jars reproducible. Jar file names use {@link #baseVersion} instead.
+     */
+    @Shared
+    String jarMetadataVersion = GradleVersion.current().snapshot
+        ? GradleVersion.current().version.replaceFirst(/\d{14}[-+]\d{4}/, "SNAPSHOT")
+        : GradleVersion.current().version
+
     def coreLibsModules = [
         "ant",
         "ant-api",
@@ -443,7 +455,7 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
 
     protected void assertIsGradleJar(TestFile jar) {
         jar.assertIsFile()
-        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Version'), equalTo(baseVersion))
+        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Version'), equalTo(jarMetadataVersion))
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Title'), equalTo('Gradle'))
     }
 

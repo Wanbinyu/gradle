@@ -19,7 +19,6 @@ package org.gradle
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.precondition.Requires
 import org.gradle.test.preconditions.TestExecutionPreconditions
-import org.gradle.util.GradleVersion
 import spock.lang.Issue
 
 import java.util.zip.ZipFile
@@ -100,12 +99,6 @@ class DistributionIntegritySpec extends DistributionIntegrationSpec {
      * name itself always uses the base version.
      */
     def "all Gradle module jars contain a Maven pom.properties"() {
-        given:
-        def fullVersion = GradleVersion.current().version
-        def expectedVersion = GradleVersion.current().snapshot
-            ? fullVersion.replaceFirst(/\d{14}[-+]\d{4}/, "SNAPSHOT")
-            : fullVersion
-
         when:
         def gradleJars = collectJars(unpackDistribution()).findAll {
             it.name.startsWith("gradle-") && it.name.endsWith("-${baseVersion}.jar")
@@ -128,7 +121,7 @@ class DistributionIntegritySpec extends DistributionIntegrationSpec {
                 def properties = new Properties()
                 zip.getInputStream(entry).withCloseable { properties.load(it) }
                 def actual = [properties.groupId, properties.artifactId, properties.version]
-                def expected = ["org.gradle", artifactId, expectedVersion]
+                def expected = ["org.gradle", artifactId, jarMetadataVersion]
                 if (actual != expected) {
                     problems[jar.name] = "expected $expected but was $actual"
                 }

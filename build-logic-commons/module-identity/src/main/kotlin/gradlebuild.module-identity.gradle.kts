@@ -23,7 +23,7 @@ import gradlebuild.basics.isPromotionBuild
 import gradlebuild.basics.releasedVersionsFile
 import gradlebuild.basics.repoRoot
 import gradlebuild.identity.extension.GradleModuleExtension
-import gradlebuild.identity.pomPropertiesVersion
+import gradlebuild.identity.reproducibleFullVersion
 import gradlebuild.identity.extension.ReleasedVersionsDetails
 import java.util.Optional
 import java.util.jar.Attributes
@@ -85,24 +85,28 @@ class LazyProjectVersion(private val version: Provider<String>) {
 group = "org.gradle"
 version = LazyProjectVersion(gradleModule.identity.version.map { it.version })
 
+// The version recorded inside the jar. The file name keeps the base version (`archiveVersion`
+// below), but the metadata records the full version so a jar reports the version it is actually
+// published under. See `reproducibleFullVersion`.
+val jarMetadataVersion = reproducibleFullVersion()
+
 tasks.withType<Jar>().configureEach {
     archiveBaseName = gradleModule.identity.baseName
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
     manifest.attributes(
         mapOf(
             Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle",
-            Attributes.Name.IMPLEMENTATION_VERSION.toString() to gradleModule.identity.version.map { it.baseVersion.version }
+            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion
         )
     )
 }
 
 // The org.gradle.pom-properties plugin adds a Maven-style pom.properties to the standard `jar`.
-// Override the coordinates to match how Gradle modules are published (gradle-<name>) and keep
-// nightly builds reproducible by replacing the timestamp with SNAPSHOT (see pomPropertiesVersion).
-// groupId defaults to project.group ("org.gradle").
+// Override the coordinates to match how Gradle modules are published (gradle-<name>), using the
+// same recorded version as the manifest. groupId defaults to project.group ("org.gradle").
 pomProperties {
     artifactId = gradleModule.identity.baseName
-    version = pomPropertiesVersion()
+    version = jarMetadataVersion
 }
 
 // The plugin only wires the standard `jar`. When the Shadow plugin is applied, the distribution

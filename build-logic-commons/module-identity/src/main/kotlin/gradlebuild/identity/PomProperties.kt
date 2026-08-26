@@ -16,25 +16,10 @@
 
 package gradlebuild.identity
 
-import gradlebuild.identity.extension.GradleModuleExtension
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.pomproperties.GeneratePomProperties
-
-/**
- * The version recorded in the generated `pom.properties`: the full Gradle version so that
- * permanently published milestones/RCs stay identifiable, with the per-build timestamp of
- * nightly/snapshot builds replaced by `SNAPSHOT` (the Maven convention) so the file — and thus
- * the jar — stays reproducible. This is the pom.properties content only; the jar file name keeps
- * the base version.
- */
-fun Project.pomPropertiesVersion(): Provider<String> {
-    val identity = extensions.getByType(GradleModuleExtension::class.java).identity
-    return identity.version.zip(identity.buildTimestamp.orElse("")) { version, timestamp ->
-        if (timestamp.isEmpty()) version.version else version.version.replace(timestamp, "SNAPSHOT")
-    }
-}
 
 /**
  * Registers a [GeneratePomProperties] task (the task type comes from the `org.gradle.pom-properties`
@@ -48,7 +33,7 @@ fun Project.registerPomPropertiesTask(
     // Captured eagerly: module-identity sets the group before this is called, so the value is a
     // plain String and stays configuration-cache friendly.
     val moduleGroupId = group.toString()
-    val moduleVersion = pomPropertiesVersion()
+    val moduleVersion = reproducibleFullVersion()
     return tasks.register(taskName, GeneratePomProperties::class.java) {
         groupId.set(moduleGroupId)
         this.artifactId.set(artifactId)

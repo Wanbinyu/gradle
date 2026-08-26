@@ -27,6 +27,7 @@ import gradlebuild.configureAsRuntimeElements
 import gradlebuild.docs.GradleUserManualPlugin
 import gradlebuild.docs.dsl.source.ExtractDslMetaDataTask
 import gradlebuild.identity.registerPomPropertiesTask
+import gradlebuild.identity.reproducibleFullVersion
 import gradlebuild.docs.dsl.source.GenerateApiMapping
 import gradlebuild.docs.dsl.source.GenerateDefaultImports
 import gradlebuild.instrumentation.extensions.InstrumentationMetadataExtension
@@ -171,6 +172,10 @@ extensions.configure<InstrumentationMetadataExtension>(INSTRUMENTED_METADATA_EXT
     upgradedPropertiesFile = generatedJsonFileFor("upgraded-properties")
 }
 
+// The version recorded inside the synthesized metadata jars, matching the module jars. The file
+// names keep the base version via `archiveVersion`. See `reproducibleFullVersion`.
+val jarMetadataVersion = reproducibleFullVersion()
+
 // Jar task to package all metadata in 'gradle-runtime-api-info.jar'
 val runtimeApiInfoPomProperties = registerPomPropertiesTask("generateRuntimeApiInfoPomProperties", provider { runtimeApiJarName })
 val runtimeApiInfoJar = tasks.register<Jar>("runtimeApiInfoJar") {
@@ -178,7 +183,7 @@ val runtimeApiInfoJar = tasks.register<Jar>("runtimeApiInfoJar") {
     manifest.attributes(
         mapOf(
             Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle",
-            Attributes.Name.IMPLEMENTATION_VERSION.toString() to gradleModule.identity.version.map { it.baseVersion.version }
+            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion
         )
     )
     archiveBaseName = runtimeApiJarName
@@ -307,7 +312,7 @@ val gradleApiKotlinExtensionsJar = tasks.register<Jar>("gradleApiKotlinExtension
     manifest.attributes(
         mapOf(
             Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle",
-            Attributes.Name.IMPLEMENTATION_VERSION.toString() to gradleModule.identity.version.map { it.baseVersion.version }
+            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion
         )
     )
     archiveBaseName = "gradle-kotlin-dsl-extensions"
