@@ -110,8 +110,11 @@ abstract class ShadedJar : DefaultTask() {
             if (!buildReceiptFile.isEmpty) {
                 jarOutputStream.addJarEntry(BuildReceipt.buildReceiptLocation, buildReceiptFile.singleFile)
             }
-            if (pomPropertiesFile.isPresent) {
-                jarOutputStream.addJarEntry(pomPropertiesEntryPath.get(), pomPropertiesFile.get().asFile)
+            // Both are optional and always wired together; require both before writing the entry
+            // so a half-wired task skips it rather than failing on a missing value.
+            val entryPath = pomPropertiesEntryPath.orNull
+            if (entryPath != null && pomPropertiesFile.isPresent) {
+                jarOutputStream.addJarEntry(entryPath, pomPropertiesFile.get().asFile)
             }
             relocatedClassesConfiguration.files.forEach { classesDir ->
                 val classesDirPath = classesDir.toPath()

@@ -90,6 +90,11 @@ version = LazyProjectVersion(gradleModule.identity.version.map { it.version })
 // published under. See `reproducibleFullVersion`.
 val jarMetadataVersion = reproducibleFullVersion()
 
+// The Maven groupId. Captured here, not inside the task configuration below: there the innermost
+// receiver is the Jar task, so `group` would resolve to Task.getGroup() (the task's lifecycle
+// group) rather than the project group. Set just above, so this is already a plain String.
+val moduleGroupId = group.toString()
+
 tasks.withType<Jar>().configureEach {
     archiveBaseName = gradleModule.identity.baseName
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
@@ -104,7 +109,8 @@ tasks.withType<Jar>().configureEach {
             // Both follow the Maven Archiver convention (project.organization.name and
             // project.groupId), which is what these scanners are written against.
             Attributes.Name.IMPLEMENTATION_VENDOR.toString() to "Gradle Technologies",
-            Attributes.Name.IMPLEMENTATION_VENDOR_ID.toString() to group.toString()
+            // Spelled out: Attributes.Name.IMPLEMENTATION_VENDOR_ID is deprecated for removal.
+            "Implementation-Vendor-Id" to moduleGroupId
         )
     )
 }
