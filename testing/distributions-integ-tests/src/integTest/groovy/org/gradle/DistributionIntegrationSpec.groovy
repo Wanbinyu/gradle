@@ -453,13 +453,24 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
         contentsDir.file('docs/dsl/index.html').assertContents(containsString("<title>Gradle DSL Version ${version}</title>"))
     }
 
+    /**
+     * The Maven groupId a distribution jar declares, in both its manifest and its pom.properties.
+     * Almost every jar is built by a project under {@code org.gradle}. The public API ABI jar is
+     * the exception: {@code :distributions-full} takes it from {@code :public-api}, which uses
+     * {@code org.gradle.experimental} - the group naming the capability that dependency requests.
+     */
+    protected static String expectedGroupFor(String artifactId) {
+        artifactId == 'gradle-public-api-legacy' ? 'org.gradle.experimental' : 'org.gradle'
+    }
+
     protected void assertIsGradleJar(TestFile jar) {
         jar.assertIsFile()
+        def artifactId = jar.name - "-${baseVersion}.jar"
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Version'), equalTo(jarMetadataVersion))
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Title'), equalTo('Gradle'))
         // Vendor evidence, so scanners reading only the manifest can identify the artifact.
         assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Vendor'), equalTo('Gradle Technologies'))
-        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Vendor-Id'), equalTo('org.gradle'))
+        assertThat(jar.name, jar.manifest.mainAttributes.getValue('Implementation-Vendor-Id'), equalTo(expectedGroupFor(artifactId)))
     }
 
     private static void assertIsGradleApiMetadataJar(TestFile jar) {

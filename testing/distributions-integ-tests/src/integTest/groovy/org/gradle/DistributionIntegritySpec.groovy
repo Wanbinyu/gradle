@@ -111,7 +111,8 @@ class DistributionIntegritySpec extends DistributionIntegrationSpec {
         def problems = [:]
         gradleJars.each { jar ->
             def artifactId = jar.name - "-${baseVersion}.jar"
-            def entryName = "META-INF/maven/org.gradle/${artifactId}/pom.properties"
+            def groupId = expectedGroupFor(artifactId)
+            def entryName = "META-INF/maven/${groupId}/${artifactId}/pom.properties"
             new ZipFile(jar).withCloseable { zip ->
                 def entry = zip.getEntry(entryName)
                 if (entry == null) {
@@ -121,7 +122,7 @@ class DistributionIntegritySpec extends DistributionIntegrationSpec {
                 def properties = new Properties()
                 zip.getInputStream(entry).withCloseable { properties.load(it) }
                 def actual = [properties.groupId, properties.artifactId, properties.version]
-                def expected = ["org.gradle", artifactId, jarMetadataVersion]
+                def expected = [groupId, artifactId, jarMetadataVersion]
                 if (actual != expected) {
                     problems[jar.name] = "expected $expected but was $actual"
                 }

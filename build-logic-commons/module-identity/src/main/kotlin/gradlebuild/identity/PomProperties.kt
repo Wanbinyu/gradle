@@ -30,9 +30,10 @@ fun Project.registerPomPropertiesTask(
     taskName: String,
     artifactId: Provider<String>
 ): TaskProvider<GeneratePomProperties> {
-    // Captured eagerly: module-identity sets the group before this is called, so the value is a
-    // plain String and stays configuration-cache friendly.
-    val moduleGroupId = group.toString()
+    // Read lazily, matching the plugin's own groupId convention and the manifest, so a project
+    // that overrides `group` in its build script (`:public-api` uses org.gradle.experimental) is
+    // reflected in both metadata sources rather than only one.
+    val moduleGroupId = provider { group.toString() }
     val moduleVersion = reproducibleFullVersion()
     return tasks.register(taskName, GeneratePomProperties::class.java) {
         groupId.set(moduleGroupId)

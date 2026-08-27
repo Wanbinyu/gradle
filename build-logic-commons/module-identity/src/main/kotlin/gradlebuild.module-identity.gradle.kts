@@ -90,10 +90,11 @@ version = LazyProjectVersion(gradleModule.identity.version.map { it.version })
 // published under. See `reproducibleFullVersion`.
 val jarMetadataVersion = reproducibleFullVersion()
 
-// The Maven groupId. Captured here, not inside the task configuration below: there the innermost
-// receiver is the Jar task, so `group` would resolve to Task.getGroup() (the task's lifecycle
-// group) rather than the project group. Set just above, so this is already a plain String.
-val moduleGroupId = group.toString()
+// The Maven groupId, read lazily so a project that overrides `group` in its own build script
+// (after this plugin is applied) is reflected in the manifest. Declared here rather than inside
+// the task configuration below: there the innermost receiver is the Jar task, so a bare `group`
+// would resolve to Task.getGroup() - the task's lifecycle group - not the project group.
+val moduleGroupId = provider { group.toString() }
 
 tasks.withType<Jar>().configureEach {
     archiveBaseName = gradleModule.identity.baseName
