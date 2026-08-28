@@ -51,6 +51,7 @@ val gradleModule = extensions.create<GradleModuleExtension>(GradleModuleExtensio
     // compute these at the settings-level instead of the project-level.
     identity {
         baseName = "gradle-$name"
+        group = "org.gradle"
         buildTimestamp = buildTimestamp()
         promotionBuild = isPromotionBuild
 
@@ -85,16 +86,19 @@ val gradleModule = extensions.create<GradleModuleExtension>(GradleModuleExtensio
     }
 }
 
-class LazyProjectVersion(private val version: Provider<String>) {
-    override fun toString(): String = version.get()
+/**
+ * Wraps a lazily computed value for assignment to `Project.group` / `Project.version`, which are
+ * plain `Object` and always read through `toString()`. Without this the project properties would
+ * capture their value at apply time and a module that overrides its identity afterwards - as
+ * `:public-api` does - would not be reflected in them.
+ */
+class LazyProjectProperty(private val value: Provider<String>) {
+    override fun toString(): String = value.get()
 }
 
-group = "org.gradle"
-version = LazyProjectVersion(gradleModule.identity.version.map { it.version })
-
-// Read from the project so a module that sets its own group is reflected in its jar metadata
-// (`:public-api` publishes under org.gradle.experimental).
-gradleModule.identity.group.convention(provider { group.toString() })
+// ModuleIdentity is the source of truth; the project properties derive from it.
+group = LazyProjectProperty(gradleModule.identity.group)
+version = LazyProjectProperty(gradleModule.identity.version.map { it.version })
 
 tasks.withType<Jar>().configureEach {
     archiveBaseName = gradleModule.identity.baseName
