@@ -16,6 +16,7 @@
 
 package gradlebuild.identity
 
+import gradlebuild.identity.extension.GradleModuleExtension
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
@@ -24,21 +25,17 @@ import org.gradle.pomproperties.GeneratePomProperties
 /**
  * Registers a [GeneratePomProperties] task (the task type comes from the `org.gradle.pom-properties`
  * plugin) for a distribution jar whose artifactId is not the module default the plugin convention
- * handles — namely the public-API ABI jar and the synthesized metadata jars.
+ * handles - namely the public-API ABI jar and the synthesized metadata jars.
  */
 fun Project.registerPomPropertiesTask(
     taskName: String,
     artifactId: Provider<String>
 ): TaskProvider<GeneratePomProperties> {
-    // Read lazily, matching the plugin's own groupId convention and the manifest, so a project
-    // that overrides `group` in its build script (`:public-api` uses org.gradle.experimental) is
-    // reflected in both metadata sources rather than only one.
-    val moduleGroupId = provider { group.toString() }
-    val moduleVersion = reproducibleFullVersion()
+    val identity = extensions.getByType(GradleModuleExtension::class.java).identity
     return tasks.register(taskName, GeneratePomProperties::class.java) {
-        groupId.set(moduleGroupId)
+        groupId.set(identity.group)
         this.artifactId.set(artifactId)
-        version.set(moduleVersion)
+        version.set(identity.reproducibleVersion)
         destinationDirectory.set(layout.buildDirectory.dir("generated-resources/$taskName"))
     }
 }

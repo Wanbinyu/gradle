@@ -23,7 +23,6 @@ import gradlebuild.basics.isPromotionBuild
 import gradlebuild.basics.releasedVersionsFile
 import gradlebuild.basics.repoRoot
 import gradlebuild.identity.extension.GradleModuleExtension
-import gradlebuild.identity.reproducibleFullVersion
 import gradlebuild.identity.extension.ReleasedVersionsDetails
 import java.util.Optional
 import java.util.jar.Attributes
@@ -69,6 +68,14 @@ val gradleModule = extensions.create<GradleModuleExtension>(GradleModuleExtensio
         val baseVersion = trimmedContentsOfFile("version.txt")
         version = baseVersion.zip(computedSuffix) { base, suffix -> GradleVersion.version("$base$suffix") }
         snapshot = specifiedSuffix.map { false }.orElse(true)
+
+        // Same suffix decision as `version`, except that the two timestamped forms record
+        // SNAPSHOT instead of the timestamp. Derived here rather than by rewriting `version`
+        // afterwards, so the version qualifier is kept and no timestamp is needed at all.
+        val reproducibleSuffix = specifiedSuffix
+            .orElse(buildVersionQualifier.map { "-$it-SNAPSHOT" })
+            .orElse("-SNAPSHOT")
+        reproducibleVersion = baseVersion.zip(reproducibleSuffix) { base, suffix -> "$base$suffix" }
         releasedVersions = version.map {
             ReleasedVersionsDetails(
                 it.baseVersion,
@@ -85,43 +92,41 @@ class LazyProjectVersion(private val version: Provider<String>) {
 group = "org.gradle"
 version = LazyProjectVersion(gradleModule.identity.version.map { it.version })
 
-// The version recorded inside the jar. The file name keeps the base version (`archiveVersion`
-// below), but the metadata records the full version so a jar reports the version it is actually
-// published under. See `reproducibleFullVersion`.
-val jarMetadataVersion = reproducibleFullVersion()
-
-// The Maven groupId, read lazily so a project that overrides `group` in its own build script
-// (after this plugin is applied) is reflected in the manifest. Declared here rather than inside
-// the task configuration below: there the innermost receiver is the Jar task, so a bare `group`
-// would resolve to Task.getGroup() - the task's lifecycle group - not the project group.
-val moduleGroupId = provider { group.toString() }
+// Read from the project so a module that sets its own group is reflected in its jar metadata
+// (`:public-api` publishes under org.gradle.experimental).
+gradleModule.identity.group.convention(provider { group.toString() })
 
 tasks.withType<Jar>().configureEach {
     archiveBaseName = gradleModule.identity.baseName
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
     manifest.attributes(
         mapOf(
-            // Product evidence. Kept as "Gradle" rather than the module name so it matches the
-            // product of `cpe:2.3:a:gradle:gradle`, which is how CPE-based scanners key Gradle.
+            // Maven Archiver writes Implementation-Title from the POM name and
+            // Implementation-Vendor from the organization; we follow it for the vendor.
+            //
+            // The title is "Gradle" rather than the module name because it serves as product
+            // evidence for CPE-based scanners, matching `cpe:2.3:a:gradle:gradle` and the value
+            // every earlier release already carries. Scanners that key off Maven coordinates do
+            // not read it: pom.properties takes precedence over the manifest for them.
             Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle",
-            Attributes.Name.IMPLEMENTATION_VERSION.toString() to jarMetadataVersion,
-            // Vendor evidence, so a scanner reading only the manifest can still identify the
-            // artifact. IMPLEMENTATION_VENDOR_ID carries the groupId, mirroring pom.properties.
-            // Both follow the Maven Archiver convention (project.organization.name and
-            // project.groupId), which is what these scanners are written against.
+            Attributes.Name.IMPLEMENTATION_VERSION.toString() to gradleModule.identity.reproducibleVersion,
             Attributes.Name.IMPLEMENTATION_VENDOR.toString() to "Gradle Technologies",
-            // Spelled out: Attributes.Name.IMPLEMENTATION_VENDOR_ID is deprecated for removal.
-            "Implementation-Vendor-Id" to moduleGroupId
+            // Not a Maven Archiver attribute. It is read first by scanners deriving a groupId
+            // from the manifest (Trivy tries Implementation-Vendor-Id, then Bundle-SymbolicName,
+            // then Implementation-Vendor), so without it they would take the vendor name above
+            // as the group. Spelled out because the JDK constant is deprecated for removal.
+            "Implementation-Vendor-Id" to gradleModule.identity.group
         )
     )
 }
 
-// The org.gradle.pom-properties plugin adds a Maven-style pom.properties to the standard `jar`.
-// Override the coordinates to match how Gradle modules are published (gradle-<name>), using the
-// same recorded version as the manifest. groupId defaults to project.group ("org.gradle").
+// The org.gradle.pom-properties plugin adds a Maven-style pom.properties to the standard `jar`,
+// at the same path and with the same keys Maven Archiver writes. Take the coordinates from
+// ModuleIdentity so they match the manifest and how the module is published.
 pomProperties {
+    groupId = gradleModule.identity.group
     artifactId = gradleModule.identity.baseName
-    version = jarMetadataVersion
+    version = gradleModule.identity.reproducibleVersion
 }
 
 // The plugin only wires the standard `jar`. When the Shadow plugin is applied, the distribution

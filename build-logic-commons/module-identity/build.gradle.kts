@@ -9,9 +9,9 @@ group = "gradlebuild"
 dependencies {
     api(platform(projects.buildPlatform))
 
-    // Exposed so downstream build-logic projects can use the GeneratePomProperties task type
-    // for the distribution jars that are not the standard `jar` (shaded, ABI, metadata jars).
-    api(buildLibs.pomPropertiesPlugin)
+    api(buildLibs.pomPropertiesPlugin) {
+        because("downstream build-logic projects use the GeneratePomProperties task type for the distribution jars that are not the standard `jar` (shaded, ABI, metadata jars)")
+    }
 
     implementation(projects.basics)
 
