@@ -71,13 +71,7 @@ gradleModule {
 val executableJar = tasks.register<Jar>("executableJar") {
     archiveFileName = "gradle-wrapper-executable.jar"
     manifest {
-        // The wrapper jar is checked into user repositories and is deliberately identical across
-        // Gradle versions, so it carries no version. The module coordinates are dropped for the
-        // same reason: it is not published as a Maven artifact, and keeping them out avoids
-        // changing the jar (and every user's checked-in copy) for no scanner benefit.
         attributes.remove(Attributes.Name.IMPLEMENTATION_VERSION.toString())
-        attributes.remove(Attributes.Name.IMPLEMENTATION_VENDOR.toString())
-        attributes.remove("Implementation-Vendor-Id")
         attributes(Attributes.Name.IMPLEMENTATION_TITLE.toString() to "Gradle Wrapper")
         attributes("SPDX-License-Identifier" to "Apache-2.0")
         attributes(Attributes.Name.MAIN_CLASS.toString() to "org.gradle.wrapper.GradleWrapperMain")
