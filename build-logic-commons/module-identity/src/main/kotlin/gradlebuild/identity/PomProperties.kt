@@ -29,7 +29,7 @@ import org.gradle.pomproperties.GeneratePomProperties
  */
 fun Project.registerPomPropertiesTask(
     taskName: String,
-    artifactId: Provider<String>
+    artifactId: String
 ): TaskProvider<GeneratePomProperties> {
     val identity = extensions.getByType(GradleModuleExtension::class.java).identity
     return tasks.register(taskName, GeneratePomProperties::class.java) {

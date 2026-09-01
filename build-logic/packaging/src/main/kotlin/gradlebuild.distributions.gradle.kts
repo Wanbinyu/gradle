@@ -171,7 +171,7 @@ extensions.configure<InstrumentationMetadataExtension>(INSTRUMENTED_METADATA_EXT
 }
 
 // Jar task to package all metadata in 'gradle-runtime-api-info.jar'
-val runtimeApiInfoPomProperties = registerPomPropertiesTask("generateRuntimeApiInfoPomProperties", provider { runtimeApiJarName })
+val runtimeApiInfoPomProperties = registerPomPropertiesTask("generateRuntimeApiInfoPomProperties", runtimeApiJarName)
 val runtimeApiInfoJar = tasks.register<Jar>("runtimeApiInfoJar") {
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
     archiveBaseName = runtimeApiJarName
@@ -294,7 +294,7 @@ val compileGradleApiKotlinExtensions = tasks.named("compileGradleApiKotlinExtens
     destinationDirectory = layout.buildDirectory.dir("classes/kotlin-dsl-extensions")
 }
 
-val gradleApiKotlinExtensionsPomProperties = registerPomPropertiesTask("generateGradleApiKotlinExtensionsPomProperties", provider { "gradle-kotlin-dsl-extensions" })
+val gradleApiKotlinExtensionsPomProperties = registerPomPropertiesTask("generateGradleApiKotlinExtensionsPomProperties", "gradle-kotlin-dsl-extensions")
 val gradleApiKotlinExtensionsJar = tasks.register<Jar>("gradleApiKotlinExtensionsJar") {
     archiveVersion = gradleModule.identity.version.map { it.baseVersion.version }
     archiveBaseName = "gradle-kotlin-dsl-extensions"
