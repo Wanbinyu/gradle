@@ -49,7 +49,7 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
      */
     @Shared
     String jarMetadataVersion = GradleVersion.current().snapshot
-        ? GradleVersion.current().version.replaceFirst(/\d{14}[-+]\d{4}/, "SNAPSHOT")
+        ? GradleVersion.current().version.replaceFirst(/\d{14}([-+]\d{4})?/, "SNAPSHOT")
         : GradleVersion.current().version
 
     def coreLibsModules = [
