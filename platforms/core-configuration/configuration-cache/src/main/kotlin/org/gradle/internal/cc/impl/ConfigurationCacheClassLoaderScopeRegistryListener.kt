@@ -16,7 +16,6 @@
 
 package org.gradle.internal.cc.impl
 
-import com.google.common.collect.ImmutableSet
 import org.gradle.api.internal.initialization.ClassLoaderScopeIdentifier
 import org.gradle.api.internal.initialization.loadercache.ClassLoaderId
 import org.gradle.initialization.ClassLoaderScopeId
@@ -28,7 +27,6 @@ import org.gradle.internal.cc.impl.serialize.ClassLoaderRole
 import org.gradle.internal.cc.impl.serialize.ClassLoaderScopeSpec
 import org.gradle.internal.cc.impl.serialize.ScopeLookup
 import org.gradle.internal.cc.impl.serialize.describeClassLoader
-import org.gradle.internal.cc.impl.serialize.describeKnownClassLoaders
 import org.gradle.internal.classloader.DelegatingClassLoader
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.hash.HashCode
@@ -54,61 +52,107 @@ class ConfigurationCacheClassLoaderScopeRegistryListener(
     val loaders = IdentityHashMap<ClassLoader, Pair<ClassLoaderScopeSpec, ClassLoaderRole>>()
 
     private
-    var recording = false
+    var state = State.IDLE
+
+    private
+    enum class State {
+        /** Before the build tree starts. No event was received. */
+        IDLE,
+
+        /** Registered as a listener. Events are received and recorded. */
+        ACTIVE,
+
+        /** Unregistered and the recorded state released. Terminal. */
+        DISPOSED
+    }
 
     /**
      * Starts recording the [ClassLoaderScopeSpec]s of this build tree.
      *
-     * Recording starts before any scope can be created, so that no scope is
-     * missed. A build that does not need the scope tree stops the recording
-     * again through [stopRecording].
+     * This runs before any scope of the build tree can be created, so that no
+     * scope is missed. A build that does not need the scope tree stops the
+     * recording again through [stopRecording].
      */
     override fun afterBuildTreeStart() {
+        startRecording()
+    }
+
+    private
+    fun startRecording() {
         synchronized(lock) {
-            check(!recording) { "Recording has already started." }
+            check(state == State.IDLE) {
+                "Cannot start recording ClassLoaderScopes in state $state."
+            }
             listenerManager.add(this)
-            recording = true
+            state = State.ACTIVE
         }
     }
 
     /**
-     * Stops recording and releases the recorded state. Does nothing if the
-     * recording was already stopped.
+     * Unregisters the listener and releases the recorded state.
+     *
+     * Callers invoke this more than once per build tree, so a call in
+     * [State.DISPOSED] returns without doing anything. The state is terminal:
+     * recording cannot start again for this build tree.
      */
     fun stopRecording() {
         synchronized(lock) {
-            resetState()
-            if (recording) {
-                listenerManager.remove(this)
-                recording = false
+            if (state == State.DISPOSED) {
+                return
+            }
+            check(state == State.ACTIVE) {
+                "Cannot stop recording ClassLoaderScopes in state $state. " +
+                    "Recording starts when the build tree starts, so it is always active by this point."
+            }
+            dispose()
+        }
+    }
+
+    /**
+     * Releases the state of a listener that the build tree no longer needs.
+     *
+     * Unlike [stopRecording] this accepts every state, because the services of
+     * a build tree are closed even when the tree failed before it started.
+     */
+    override fun close() {
+        synchronized(lock) {
+            if (state != State.DISPOSED) {
+                dispose()
             }
         }
     }
 
     private
-    fun resetState() {
+    fun dispose() {
+        if (state == State.ACTIVE) {
+            listenerManager.remove(this)
+        }
         scopeSpecs.clear()
         loaders.clear()
-    }
-
-    override fun close() {
-        stopRecording()
+        state = State.DISPOSED
     }
 
     override fun scopeFor(classLoader: ClassLoader?): Pair<ClassLoaderScopeSpec, ClassLoaderRole>? {
         synchronized(lock) {
-            // TODO:configuration-cache assert the spec can no longer change after it has been observed
+            check(state == State.ACTIVE) {
+                "Cannot look up a ClassLoaderScope in state $state. " +
+                    "The recorded scopes are only available while the entry is being stored."
+            }
             return loaders[classLoader]
         }
     }
 
-    override val knownClassLoaders: Set<ClassLoader>
-        get() = synchronized(lock) {
-            ImmutableSet.copyOf(loaders.keys)
+    override fun describeKnownClassLoaders(): String =
+        synchronized(lock) {
+            if (loaders.isEmpty()) "No class loaders are currently known."
+            else "These are the known class loaders:\n${loaders.keys.joinToString("\n") { "\t- $it" }}\n"
         }
 
     override fun childScopeCreated(parentId: ClassLoaderScopeId, childId: ClassLoaderScopeId, origin: ClassLoaderScopeOrigin?) {
         synchronized(lock) {
+            check(state == State.ACTIVE) {
+                "Received a ClassLoaderScope event for $childId in state $state."
+            }
             if (scopeSpecs.containsKey(childId)) {
                 // scope is being reused
                 return
@@ -119,7 +163,7 @@ class ConfigurationCacheClassLoaderScopeRegistryListener(
                 null
             } else {
                 val lookupParent = scopeSpecs[parentId]
-                require(lookupParent != null) {
+                check(lookupParent != null) {
                     "Cannot find parent $parentId for child scope $childId"
                 }
                 lookupParent
@@ -138,6 +182,9 @@ class ConfigurationCacheClassLoaderScopeRegistryListener(
                 "Please report this error, run './gradlew --stop' and try again."
         }
         synchronized(lock) {
+            check(state == State.ACTIVE) {
+                "Received a ClassLoader event for scope '$scopeId' in state $state."
+            }
             val spec = scopeSpecs[scopeId]
             check(spec != null) {
                 "Spec for ClassLoaderScope '$scopeId' not found!"
